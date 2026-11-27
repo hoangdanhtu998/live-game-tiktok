@@ -41,18 +41,18 @@
   .toast { position: absolute; top: 160px; left: 50%; transform: translateX(-50%); background: linear-gradient(90deg,#be185d,#a855f7); color: #fff; padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: 12px; z-index: 4; opacity: 0; transition: opacity .3s; pointer-events: none; white-space: nowrap; box-shadow: 0 6px 20px #0008; max-width: 92%; overflow: hidden; text-overflow: ellipsis; }
   .toast.show { opacity: .95; }
 
-  /* Quay may */
-  .gacha { position: absolute; left: 50%; top: 50%; width: min(360px, calc(100% - 16px)); max-height: calc(100% - 12px); overflow: hidden; transform: translate(-50%,-50%) scale(.6); z-index: 5; background: linear-gradient(155deg,#1a102bfa,#090711fa); border: 2px solid #a855f7; border-radius: 18px; padding: 10px; text-align: center; opacity: 0; pointer-events: none; transition: .2s; box-shadow: 0 0 40px #a855f788; }
-  .gacha.show { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  /* Wheel appears in the phone's dark lower area, preserving the battle view. */
+  .gacha { position: absolute; left: 50%; top: auto; bottom: 4px; width: min(360px, calc(100% - 16px)); max-height: 172px; overflow: hidden; transform: translate(-50%, 8px) scale(.98); z-index: 6; background: linear-gradient(155deg,rgba(26,16,43,.72),rgba(9,7,17,.70)); border: 1px solid #a855f788; border-radius: 12px; padding: 6px; text-align: center; opacity: 0; pointer-events: none; transition: opacity .16s, transform .16s; box-shadow: 0 0 14px #a855f722; }
+  .gacha.show { opacity: .78; transform: translate(-50%, 0) scale(1); }
   .gacha .gt { font-size: 10px; color: #e9d5ff; font-weight: 800; }
   .gacha .gr { font-size: 18px; line-height: 1.1; font-weight: 900; margin: 5px 0 2px; text-shadow: 0 0 14px currentColor; }
   .gacha .gs { font-size: 10px; font-weight: 800; letter-spacing: .3px; min-height: 14px; }
   .gacha .gacha-clock { display:flex; align-items:center; gap:7px; margin:7px 0 6px; color:#c4b5fd; font-size:9px; }
   .gacha .gacha-track { height:4px; flex:1; overflow:hidden; border-radius:9px; background:#ffffff18; }
   .gacha .gacha-track i { display:block; width:0; height:100%; background:linear-gradient(90deg,#38bdf8,#a78bfa,#fbbf24); }
-  .gacha .gacha-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; }
-  .gacha .gacha-slot { min-width:0; min-height:38px; display:flex; align-items:center; justify-content:flex-start; gap:4px; padding:3px; border:1px solid #ffffff18; border-radius:7px; background:#ffffff08; color:#e9d5ff; text-align:left; transition:background .08s,border-color .08s,transform .08s; }
-  .gacha .gacha-avatar { width:26px; height:30px; flex:0 0 26px; display:grid; place-items:center; font-size:15px; }
+  .gacha .gacha-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:3px; max-height:92px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#a855f788 transparent; }
+  .gacha .gacha-slot { min-width:0; min-height:30px; display:flex; align-items:center; justify-content:flex-start; gap:3px; padding:2px 3px; border:1px solid #ffffff14; border-radius:6px; background:#ffffff05; color:#e9d5ff; text-align:left; transition:background .08s,border-color .08s,transform .08s; }
+  .gacha .gacha-avatar { width:20px; height:24px; flex:0 0 20px; display:grid; place-items:center; font-size:13px; }
   .gacha .gacha-avatar img { width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 1px 3px #000); }
   .gacha .gacha-copy { min-width:0; flex:1; }
   .gacha .gacha-slot b { display:block; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:8px; line-height:1.1; }
@@ -64,6 +64,7 @@
   .gacha .g-role.ranged { color:#fcd34d; }
   .gacha .g-role.magic { color:#c4b5fd; }
   .gacha .gacha-slot.active { transform:scale(1.04); border-color:#fde047; background:#fbbf2428; color:#fff; box-shadow:0 0 12px #fbbf2477; z-index:1; }
+  @media (max-height: 760px) { .gacha { max-height: 154px; } .gacha .gacha-grid { max-height:72px; } .gacha .gacha-slot { min-height:26px; } .gacha .gacha-avatar { width:18px; height:20px; flex-basis:18px; } }
 
   /* Khu dưới: bảng quà, bảng xếp hạng, nhật ký */
   .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; background: linear-gradient(#0d0a16, #06040b); border-top: 1px solid #3b2c5c; }
@@ -142,6 +143,7 @@
 <div class="adminlink"><a style="color:#f0abfc" href="control.html" target="_blank">Mở app điều khiển →</a><br><a style="color:#f0abfc" href="admin.html" target="_blank">Mở trang quản lý →</a></div>
 
 <div class="phone">
+  <div class="gacha" id="gacha"></div>
   <div class="topbar">
     <div class="host"><div class="avatar"></div><div><div style="font-weight:800">Kháng Chiến</div><div class="pill">👁 <span id="viewers">1,284</span></div></div></div>
     <div style="display:flex;gap:6px;align-items:center"><button class="rbtn" id="btnReset" title="Đặt lại trận và bảng xếp hạng">⟲ Reset</button><span class="live">LIVE</span> <span class="pill">❤ <span id="likes">0</span></span></div>
@@ -150,7 +152,6 @@
   <div class="stage">
     <canvas id="field"></canvas>
     <div class="toast" id="toast"></div>
-    <div class="gacha" id="gacha"></div>
     <div class="hud">
       <div class="teamhud xanh">
         <div class="name"><b>DÂN VIỆT & THẦN THÚ</b><span id="baseXanhTxt">100</span></div>
@@ -178,9 +179,10 @@
     </div>
     <div class="pane" id="paneDemo">
       <div class="sim">
-        <button id="simCommentXanh">Bình luận "1" (Xanh)</button><button id="simCommentDo">Bình luận "4" (Đỏ)</button>
-        <button id="simHearts">Thả 100 tim</button><button id="simDefault">Bật/tắt lính mặc định</button><button id="simGacha">🎰 Quay may</button>
+        <button id="simCommentXanh">Bình luận "1" (Xanh)</button><button id="simCommentDo">Bình luận "2" (Quái)</button>
+        <button id="simHearts">Thả 100 tim</button><button id="simDefault">Lính mặc định: TẮT</button><button id="simGacha">🎰 Quay may</button>
       </div>
+      <div class="faction-key">❤ 100 tim theo phe người xem chọn bằng bình luận gần nhất: 1 = Xanh · 2 = Quái</div>
       <div class="faction-key"><span class="x"><i></i>XANH · THẦN THÚ</span><span class="d"><i></i>QUÁI · YÊU TINH</span></div>
       <div class="gifts" id="gifts"></div>
     </div>

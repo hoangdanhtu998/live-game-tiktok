@@ -13,7 +13,7 @@ const clients = new Set();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.json': 'application/json',
+  '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json',
 };
 
 function broadcast(type, data) {
@@ -38,22 +38,36 @@ function connectTikTok() {
     broadcast('gift', { user: d.uniqueId, giftName: d.giftName, repeatCount: d.repeatCount || 1, diamonds: d.diamondCount || 0 });
   });
   conn.on('streamEnd', () => broadcast('status', { state: 'ended' }));
+  let reconnectTimer = null, reconnectAttempt = 0, connecting = false;
+  function scheduleReconnect() {
+    if (reconnectTimer || connecting) return;
+    const base = Math.min(60000, 10000 * (2 ** Math.min(reconnectAttempt, 3)));
+    const delay = Math.round(base * (0.85 + Math.random() * 0.3));
+    reconnectAttempt++;
+    broadcast('status', { state: 'waiting', retryMs: delay });
+    reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, delay);
+  }
   conn.on('disconnected', () => {
     broadcast('status', { state: 'disconnected' });
-    console.log('Mất kết nối, thử lại sau 10 giây...');
-    setTimeout(() => connect(), 10000);
+    console.log('Mất kết nối, sẽ thử kết nối lại với thời gian chờ tăng dần.');
+    scheduleReconnect();
   });
 
   function connect() {
+    if (connecting) return;
+    connecting = true;
     conn.connect()
       .then(state => {
+        connecting = false; reconnectAttempt = 0;
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
         console.log(`Đã kết nối phòng LIVE của @${USERNAME} (roomId ${state.roomId})`);
         broadcast('status', { state: 'connected', roomId: state.roomId });
       })
       .catch(err => {
+        connecting = false;
         console.log(`Không kết nối được @${USERNAME}: ${err.message || err}. Thử lại sau 15 giây.`);
         broadcast('status', { state: 'offline', message: String(err.message || err) });
-        setTimeout(connect, 15000);
+        scheduleReconnect();
       });
   }
   connect();

@@ -2,4 +2,7 @@ node_modules/
 work/
 work-preview-script.py
 preview-*.png
+*.before-*.js
+*.before-*.html
+*.before-*.png
 .env*

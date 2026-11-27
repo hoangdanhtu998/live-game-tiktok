@@ -82,7 +82,7 @@
     <h2>Giả lập quà / tim / bình luận</h2>
     <div class="row"><div class="grow"><label>Quà</label><select id="giftSel" style="width:100%"></select></div><div><label>Tên người tặng</label><input id="giftUser" value="khan_gia" style="width:110px"></div></div>
     <div class="row"><button class="ok" id="sendGift">🎁 Tặng quà cho phe đã chọn</button><button id="sendGacha">🎰 Tặng + quay may</button></div>
-    <div class="row"><button id="sendHearts">❤ Thả 100 tim</button><button id="joinX">Bình luận "1"</button><button id="joinD">Bình luận "4"</button></div>
+    <div class="row"><button id="sendHearts">❤ Thả 100 tim</button><button id="joinX">Bình luận "1"</button><button id="joinD">Bình luận "2"</button></div>
   </section>
 
   <section>
@@ -125,7 +125,7 @@
   $('sendGacha').onclick = () => send({ type: 'gift', team, gift: $('giftSel').value, user: $('giftUser').value || 'khan_gia', noGacha: false }, 'Quà + quay may');
   $('sendHearts').onclick = () => send({ type: 'hearts', team, count: 100, user: $('giftUser').value || 'khan_gia' }, 'Thả 100 tim');
   $('joinX').onclick = () => send({ type: 'comment', text: '1', user: $('giftUser').value || 'khan_gia' }, 'Bình luận 1');
-  $('joinD').onclick = () => send({ type: 'comment', text: '4', user: $('giftUser').value || 'khan_gia' }, 'Bình luận 4');
+  $('joinD').onclick = () => send({ type: 'comment', text: '2', user: $('giftUser').value || 'khan_gia' }, 'Bình luận 2');
 
   async function poll() {
     try {

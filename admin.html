@@ -76,7 +76,7 @@
   <section class="full">
     <h2>Quà TikTok → đội hình</h2>
     <table>
-      <thead><tr><th>Tên quà</th><th>Tên quà trên TikTok (tiếng Anh)</th><th>Xu (coin)</th><th>Đơn vị gọi</th><th>Số lượng</th></tr></thead>
+      <thead><tr><th>Tên quà</th><th>Tên quà trên TikTok (tiếng Anh)</th><th>Xu (coin)</th><th>Cấp quay</th><th>Quân phe Xanh</th><th>Quân phe Quái</th><th>Số lượng</th></tr></thead>
       <tbody id="giftRows"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
@@ -87,7 +87,7 @@
   <section class="full">
     <h2>Danh sách đơn vị</h2>
     <div id="unitList"></div>
-    <p class="note">Chỉnh máu, sát thương, tốc độ, tầm đánh trong <code>config.js</code> (mục <code>units</code>). Lưu ở đây sẽ dùng cấu hình mới khi mở lại màn hình LIVE.</p>
+    <p class="note">Quà cùng giá được gán nhân vật khác nhau theo từng phe; nếu lưu trùng, trang quản lý sẽ tự đổi nhân vật trùng. Quà quay may dùng cấp quay để giới hạn nhóm kết quả.</p>
   </section>
 
   <section class="full">
@@ -108,6 +108,20 @@
 
   function unitOptions(selected) {
     return unitKeys.map(k => `<option value="${k}" ${k === selected ? 'selected' : ''}>${cfg.units[k].label}</option>`).join('');
+  }
+
+  function giftUnitOptions(selected) {
+    return unitKeys.map(k => {
+      const u = cfg.units[k], label = u.labelDo ? `${u.label} / ${u.labelDo}` : u.label;
+      return `<option value="${k}" ${k === selected ? 'selected' : ''}>${label} · bậc ${u.tier || 0}</option>`;
+    }).join('');
+  }
+
+  function unusedGiftUnit(team, coins, tier) {
+    const field = team === 'xanh' ? 'unitXanh' : 'unitDo';
+    const used = new Set(cfg.gifts.filter(g => !g.random && Number(g.coins) === Number(coins)).map(g => g[field] || cfg.roster[team][g.tier]));
+    const sameTier = unitKeys.find(k => !used.has(k) && Number(cfg.units[k].tier || 0) === Number(tier));
+    return sameTier || unitKeys.find(k => !used.has(k)) || cfg.roster[team][tier];
   }
 
   function tierOptions(selected) {
@@ -138,6 +152,8 @@
         <td><input data-i="${i}" data-f="tiktokName" value="${g.tiktokName || ''}" /></td>
         <td><input type="number" data-i="${i}" data-f="coins" value="${g.coins}" /></td>
         <td><select data-i="${i}" data-f="tier">${tierOptions(g.tier)}</select></td>
+        <td><select data-i="${i}" data-f="unitXanh">${giftUnitOptions(g.unitXanh || cfg.roster.xanh[g.tier])}</select></td>
+        <td><select data-i="${i}" data-f="unitDo">${giftUnitOptions(g.unitDo || cfg.roster.do[g.tier])}</select></td>
         <td><input type="number" data-i="${i}" data-f="count" value="${g.count}" /></td>
         <td><button class="danger" data-del="${i}">Xóa</button></td>
       </tr>`).join('');
@@ -170,6 +186,34 @@
     });
   }
 
+  function makeSamePriceUnitsUnique() {
+    let changed = 0;
+    for (const team of ['xanh', 'do']) {
+      const field = team === 'xanh' ? 'unitXanh' : 'unitDo', groups = new Map();
+      for (const gift of cfg.gifts) {
+        if (gift.random) continue;
+        const price = Number(gift.coins) || 0;
+        if (!groups.has(price)) groups.set(price, []);
+        groups.get(price).push(gift);
+      }
+      for (const group of groups.values()) {
+        const used = new Set();
+        for (const gift of group) {
+          let key = gift[field] || cfg.roster[team][gift.tier];
+          if (used.has(key)) {
+            const tier = cfg.units[key]?.tier;
+            key = unitKeys.find(k => !used.has(k) && cfg.units[k].tier === tier)
+              || unitKeys.find(k => !used.has(k)) || key;
+            gift[field] = key;
+            changed++;
+          }
+          used.add(key);
+        }
+      }
+    }
+    return changed;
+  }
+
   $('giftRows').addEventListener('click', e => {
     const i = e.target.dataset.del;
     if (i === undefined) return;
@@ -180,14 +224,16 @@
 
   $('addGift').onclick = () => {
     readForm();
-    cfg.gifts.push({ id: 'gift' + Date.now(), name: 'Quà mới', coins: 1, tier: 1, count: 1 });
+    const coins = 1, tier = 1;
+    cfg.gifts.push({ id: 'gift' + Date.now(), name: 'Quà mới', coins, tier, count: 1, unitXanh: unusedGiftUnit('xanh', coins, tier), unitDo: unusedGiftUnit('do', coins, tier) });
     render();
   };
 
   $('save').onclick = () => {
     readForm();
+    const remapped = makeSamePriceUnitsUnique();
     window.saveConfig(cfg);
-    $('status').textContent = 'Đã lưu. Mở lại màn hình LIVE để áp dụng.';
+    $('status').textContent = `Đã lưu${remapped ? ` · tự đổi ${remapped} nhân vật bị trùng cùng giá` : ''}. Mở lại màn hình LIVE để áp dụng.`;
     setTimeout(() => $('status').textContent = '', 3000);
   };
 

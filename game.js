@@ -6,9 +6,11 @@
   const canvas = document.getElementById('field');
   const ctx = canvas.getContext('2d');
   const W = 390, H = 500;
+  const quality = Object.assign({ renderScale: 1, effects: true, minimap: true }, window.KC_QUALITY || {});
+  const perf = { frames: 0, slowFrames: 0, frameMs: 0, updateMs: 0, drawMs: 0, maxFrameMs: 0, fps: 0, sampleAt: 0, sampleFrames: 0 };
   const DPR = Math.min(2, window.devicePixelRatio || 1);
-  canvas.width = W * DPR; canvas.height = H * DPR;
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  canvas.width = W * DPR * quality.renderScale; canvas.height = H * DPR * quality.renderScale;
+  ctx.setTransform(DPR * quality.renderScale, 0, 0, DPR * quality.renderScale, 0, 0);
 
   // ---------- Kích thước sân ----------
   const WORLD = 1800;                              // sân dài ~4,6 màn hình
@@ -54,7 +56,7 @@
     base: { xanh: 100, do: 100 }, gateHit: { xanh: -999, do: -999 },
     hearts: { xanh: 0, do: 0 }, heartTurn: { xanh: 0, do: 0 },
     giftsSent: { xanh: 0, do: 0 }, joinCool: {}, joinTurn: { xanh: 0, do: 0 }, lastGiftTick: { xanh: -99999, do: -99999 },
-    likes: 0, viewers: 1284, lastDefault: 0, defaultOn: cfg.defaultSpawn.enabled,
+    likes: 0, viewers: 1284, lastDefault: 0, defaultOn: false,
     gameOver: null, overAt: 0, overReason: '', matchStart: 0, phase: 0,
     towerCool: { xanh: 60, do: 60 }, floorMsgT: { xanh: -999, do: -999 },
     flash: { c: '#fff', t: -999 }, lastUlt: -99999, lastSkillBanner: -999, intro: null,
@@ -81,6 +83,10 @@
   const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.ceil(w * DPR); c.height = Math.ceil(h * DPR); const g = c.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0); return [c, g]; };
   const hexA = (hex, a) => { const n = parseInt(hex.replace('#', ''), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  quality.renderScale = clamp(Number(quality.renderScale) || 1, .6, 1);
+  quality.effects = quality.effects !== false;
+  quality.minimap = quality.minimap !== false;
+  let appliedRenderScale = quality.renderScale;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
   const depthScale = y => .8 + clamp((y - LANES[0]) / (LANES[NL - 1] - LANES[0]), 0, 1) * .2;
@@ -217,10 +223,10 @@
     if (def.sprite) loadSprite(key, def.sprite, sp => { if (!def.spriteDo && !sprites[key + '@do']) sprites[key + '@do'] = deriveMonster(sp); });
     if (def.spriteDo) loadSprite(key + '@do', def.spriteDo);
   }
-  loadSprite('castle@xanh', { src: 'assets/thanh-xanh-sprite.png', cols: 3, rows: 1, frames: 3, drawW: CASTLE_W, mask: false });
-  loadSprite('castle@do', { src: 'assets/hang-yeu-3.png', cols: 3, rows: 1, frames: 3, drawW: CASTLE_W, mask: false });
+  loadSprite('castle@xanh', { src: 'assets/thanh-xanh-sprite.webp', cols: 3, rows: 1, frames: 3, drawW: CASTLE_W, mask: false });
+  loadSprite('castle@do', { src: 'assets/hang-yeu-3.webp', cols: 3, rows: 1, frames: 3, drawW: CASTLE_W, mask: false });
 
-  loadSprite('skillFx', { src: 'assets/phep-thuat-16.png', cols: 4, rows: 4, frames: 16, drawW: 128, mask: false });
+  loadSprite('skillFx', { src: 'assets/phep-thuat-16.webp', cols: 4, rows: 4, frames: 16, drawW: 128, mask: false });
 
   const spriteFor = (key, team) => { const k = cfg.units[key]?.proxy || key; return sprites[k + '@' + team] || sprites[k]; };
   const spriteOf = u => spriteFor(u.key, u.team);
@@ -316,7 +322,13 @@
   }
 
   // ---------- Hiệu ứng cơ bản ----------
-  function pushFx(p) { if (state.particles.length < MAX_PARTICLES + 60) state.particles.push(p); }
+  function pushFx(p) { if (quality.effects && state.particles.length < MAX_PARTICLES + 60) state.particles.push(p); }
+  function compactAlive(list, alive) {
+    let write = 0;
+    for (let i = 0; i < list.length; i++) if (alive(list[i])) list[write++] = list[i];
+    list.length = write;
+    return list;
+  }
   function bolt(x1, y1, x2, y2, color, life = 12) {
     const pts = [[x1, y1]], n = 6;
     for (let i = 1; i < n; i++) pts.push([x1 + (x2 - x1) * i / n + rnd(-9, 9), y1 + (y2 - y1) * i / n + rnd(-3, 3)]);
@@ -388,6 +400,7 @@
   // ---------- Sự kiện LIVE vào trận ----------
   const teamOf = {};
   const pickTeamFor = user => (teamOf[user] || (teamOf[user] = Math.random() < .5 ? 'xanh' : 'do'));
+  const giftUnitKey = (gift, team) => gift[`unit${team === 'xanh' ? 'Xanh' : 'Do'}`] || cfg.roster[team][gift.tier];
   const quoteFor = tier => pick(cfg.quotes[tier >= 6 ? 'god' : tier >= 5 ? 'god' : tier >= 3 ? 'high' : tier >= 2 ? 'mid' : 'low']);
 
   // Hai vòng 18 nhân vật. Số lựa chọn theo từng bậc giống nhau ở hai phe để cùng giá có cùng cơ hội và sức mạnh.
@@ -405,14 +418,19 @@
     return { label: 'Cận chiến', cls: 'melee' };
   }
 
-  // Tỉ lệ theo giá xu; mỗi cấp chia đều trọng số giữa các nhân vật ở vòng phe đó.
+  // Xác suất trước tiên được chia theo tier, sau đó chia đều cho các nhân vật cùng tier.
+  // Quà rẻ vẫn có thể trúng cấp cao nhưng tỉ lệ cực thấp; cấp 5-6 chỉ mở bằng quà giá trị cao.
   function gachaCandidates(coins, team) {
-    const g = cfg.gacha, m = 1 + g.k * Math.log10(1 + Math.max(0, coins));
-    const tierWeight = [g.minion || 35, ...g.base.map((b, i) => b * Math.pow(m, i))];
+    const value = Math.max(0, Number(coins) || 0);
+    const maxTier = value < 50 ? 4 : value < 1000 ? 5 : 6;
+    const tierMass = [94, 4, 1.2, 0.55, 0.20, 0.045, 0.005];
+    const priceBoost = Math.pow(1 + 0.35 * Math.log10(Math.max(1, value)), 1.2);
+    const tierWeight = tierMass.map((mass, tier) => tier <= maxTier ? mass * Math.pow(priceBoost, tier) : 0);
     const pool = GACHA_POOL[team] || GACHA_POOL.xanh;
     const counts = Array(7).fill(0);
     for (const key of pool) counts[cfg.units[key]?.tier || 0]++;
-    const raw = pool.map((key, index) => {
+    const eligible = pool.filter(key => (cfg.units[key]?.tier || 0) <= maxTier);
+    const raw = eligible.map((key, index) => {
       const tier = cfg.units[key]?.tier || 0;
       return Object.assign({ key, index, tier, weight: (tierWeight[tier] || 0) / Math.max(1, counts[tier]) }, roleInfo(key));
     });
@@ -442,10 +460,10 @@
       el.style.borderColor = col(team);
       el.innerHTML = `<div class="gt">🎡 @${escapeHtml(user)} · ${coins.toLocaleString('vi-VN')} xu · phe ${TEAM_NAME[team]}</div>
         <div class="gr" id="gachaReel">Sẵn sàng quay</div><div class="gs" id="gachaSub">Tỷ lệ trúng từng nhân vật</div>
-      <div class="gacha-clock"><span id="gachaSeconds">10.0s</span><div class="gacha-track"><i id="gachaProgress"></i></div><span>${candidates.length} con</span></div>
+      <div class="gacha-clock"><span id="gachaSeconds">4.0s</span><div class="gacha-track"><i id="gachaProgress"></i></div><span>${candidates.length} con</span></div>
         <div class="gacha-grid">${candidates.map((item, i) => { const p = portrait(item.key, team); const icon = item.cls === 'melee' ? '⚔' : item.cls === 'support' ? '💚' : item.cls === 'tank' ? '🛡' : item.cls === 'ranged' ? '🏹' : '✨'; return `<div class="gacha-slot" data-index="${i}"><span class="gacha-avatar">${p ? `<img src="${p}" alt="">` : icon}</span><span class="gacha-copy"><b>${escapeHtml(labelOf(item.key, team))}</b><small><span class="g-role ${item.cls}">${item.label}</span><span>${item.displayRate}</span></small></span></div>`; }).join('')}</div>`;
       const slots = [...el.querySelectorAll('.gacha-slot')], reel = $('gachaReel'), sub = $('gachaSub');
-      const started = performance.now(), duration = 10000;
+      const started = performance.now(), duration = 4000;
       let index = Math.floor(Math.random() * candidates.length), nextStep = started;
       const finish = () => {
         const item = candidates[result.index];
@@ -511,7 +529,7 @@
     if ((gift.random || cfg.gacha.enabled) && !opts.noGacha && Math.random() < gachaChance && gift.coins >= 1) {
       const r = rollGacha(gift.coins, team);
       showGacha(user, team, gift.coins, r, () => go(r.key, 1, true));
-    } else go(cfg.roster[team][gift.tier], gift.count, false);
+    } else go(giftUnitKey(gift, team), gift.count, false);
   }
 
   function heartsFrom(user, n, opts = {}) {
@@ -575,8 +593,9 @@
   // ---------- Luật trận ----------
   function foesOf(u, range, back = 0) {
     const out = [];
-    for (const e of state.units) {
-      if (e.team === u.team) continue;
+    const candidates = near(grid[enemyOf[u.team]], u.x, range + back);
+    for (let i = 0; i < candidates.length; i++) {
+      const e = candidates[i];
       const ahead = (e.x - u.x) * dir[u.team];
       if (ahead >= -back && ahead <= range) out.push(e);
     }
@@ -584,11 +603,15 @@
   }
   function alliesOf(u, range) {
     const out = [];
-    for (const a of state.units) if (a.team === u.team && Math.abs(a.x - u.x) <= range) out.push(a);
+    const candidates = near(grid[u.team], u.x, range);
+    for (let i = 0; i < candidates.length; i++) {
+      const a = candidates[i];
+      if (Math.abs(a.x - u.x) <= range) out.push(a);
+    }
     return out;
   }
 
-  // Lưới không gian: mỗi ô 40px chứa các quân đang đứng trong đó, để tìm hàng xóm mà không phải duyệt hết 200 quân
+  // Lưới không gian dùng chung cho mục tiêu, đánh lan, sóng và va chạm.
   const CELL = 40, NC = Math.ceil(WORLD / CELL) + 2;
   const mkGrid = () => Array.from({ length: NC }, () => []);
   const grid = { xanh: mkGrid(), do: mkGrid(), all: mkGrid() };
@@ -627,6 +650,24 @@
       if (score < bestScore) { bestScore = score; best = e; }
     }
     return best;
+  }
+  const splashCandidates = [];
+  const splashVictims = [];
+  function splashUnits(target, def) {
+    splashCandidates.length = 0;
+    const list = near(grid[target.team], target.x, def.splash);
+    const limit = def.splashMax == null ? Infinity : Math.max(0, def.splashMax - 1);
+    if (!limit) return splashCandidates;
+    for (let i = 0; i < list.length; i++) {
+      const e = list[i];
+      if (e === target || e.hp <= 0 || Math.abs(e.x - target.x) >= def.splash || Math.abs(e.lane - target.lane) > (def.splashLanes ?? 1)) continue;
+      let score = Math.abs(e.x - target.x) + Math.abs(e.lane - target.lane) * 36;
+      let at = splashCandidates.length;
+      while (at > 0 && splashCandidates[at - 1].score > score) at--;
+      splashCandidates.splice(at, 0, { unit: e, score });
+      if (splashCandidates.length > limit) splashCandidates.pop();
+    }
+    return splashCandidates;
   }
   function blockerAhead(u) {
     let best = null, bd = Infinity;
@@ -739,11 +780,12 @@
   // Gây sát thương. def.dmg là sát thương gốc; nhân thêm hệ số bậc của người đánh.
   function hit(att, target, def, mult = 1) {
     if (target.hp <= 0) return;
-    const victims = [target];
+    const victims = splashVictims;
+    victims.length = 0;
+    victims.push(target);
     if (def.splash) {
-      const nearby = state.units.filter(e => e !== target && e.team === target.team && e.hp > 0 && Math.abs(e.x - target.x) < def.splash && Math.abs(e.lane - target.lane) <= (def.splashLanes ?? 1))
-        .sort((a, b) => Math.abs(a.x - target.x) + Math.abs(a.lane - target.lane) * 36 - Math.abs(b.x - target.x) - Math.abs(b.lane - target.lane) * 36);
-      victims.push(...nearby.slice(0, Math.max(0, (def.splashMax ?? Infinity) - 1)));
+      const nearby = splashUnits(target, def);
+      for (let i = 0; i < nearby.length; i++) victims.push(nearby[i].unit);
     }
     for (const v of victims) {
       if (v.hp <= 0) continue;
@@ -1111,15 +1153,18 @@
       w.life++;
       w.x += w.dir * w.speed; w.dist += w.speed;
       if (w.follow && w.src.hp > 0) { w.src.x = w.x - w.dir * 20; w.src.state = 'attack'; }
-      for (const e of units) {
-        if (e.team === w.team || w.hit.has(e) || Math.abs(e.x - w.x) > w.w * .5) continue;
+      // copy because hit() performs another near() lookup and reuses the scratch buffer.
+      const waveUnits = near(grid[enemyOf[w.team]], w.x, w.w * .5).slice();
+      for (let wi = 0; wi < waveUnits.length; wi++) {
+        const e = waveUnits[wi];
+        if (w.hit.has(e) || Math.abs(e.x - w.x) > w.w * .5) continue;
         w.hit.add(e);
         hit(w.src, e, { dmg: cfg.units[w.src.key].dmg, fx: null }, w.mult);
         e.knock = Math.max(e.knock || 0, w.knock); if (w.kind === 'shock' || w.kind === 'roar') bolt(e.x + rnd(-6, 6), 90, e.x, e.y - 20, w.color, 14);
       }
       if (w.kind === 'shock' && w.life % 4 === 0) ring(w.x, w.y + 2, w.color, 18, 40, 4);
     }
-    state.waves = state.waves.filter(w => w.dist < w.maxDist);
+    compactAlive(state.waves, w => w.dist < w.maxDist);
 
     // đạn bay tới đúng mục tiêu rồi mới gây sát thương
     for (const s of state.shots) {
@@ -1130,7 +1175,7 @@
       if (d < s.speed + 2) { hit(s.from, s.target, s.def, s.mult || 1); s.done = true; }
       else { s.x += dx / d * s.speed; s.y += dy / d * s.speed; s.ang = Math.atan2(dy, dx); if ((s.kind === 'lantern' || s.kind === 'foxfire') && state.tick % 2 === 0) pushFx({ kind: 'dot', x: s.x, y: s.y, vx: 0, vy: -.3, color: s.kind === 'foxfire' ? '#c084fc' : '#fb923c', life: 14 }); }
     }
-    state.shots = state.shots.filter(s => !s.done);
+    compactAlive(state.shots, s => !s.done);
 
     // khói, lửa ở thành sắp vỡ
     for (const team of ['xanh', 'do']) {
@@ -1147,10 +1192,12 @@
       state.dead.push({ u, life: 36 });
       for (let i = 0; i < 4; i++) pushFx({ kind: 'smoke', x: u.x + rnd(-10, 10), y: u.y - 2, vx: rnd(-.4, .4), vy: rnd(-.7, -.3), color: '#a8927a', life: 30 });
     }
-    state.dead = state.dead.filter(d => --d.life > 0).slice(-30);
-    state.units = units.filter(u => u.hp > 0);
-    const alive = new Set(state.units);
-    state.bubbles = state.bubbles.filter(b => --b.life > 0 && alive.has(b.unit));
+    compactAlive(state.dead, d => --d.life > 0);
+    if (state.dead.length > 30) state.dead.splice(0, state.dead.length - 30);
+    compactAlive(units, u => u.hp > 0);
+    state.units = units;
+    for (const b of state.bubbles) b.life--;
+    compactAlive(state.bubbles, b => b.life > 0 && b.unit.hp > 0);
     state.shake = Math.max(0, state.shake - .5);
     for (const p of state.particles) {
       if (p.kind === 'dot' || p.kind === 'spark') { p.x += p.vx; p.y += p.vy; p.vy += .08; }
@@ -1160,7 +1207,7 @@
       else p.y -= .5;
       p.life--;
     }
-    state.particles = state.particles.filter(p => p.life > 0);
+    compactAlive(state.particles, p => p.life > 0);
     if (state.intro && state.tick - state.intro.t0 > state.intro.life) state.intro = null;
     if (!state.gameOver && (state.base.xanh <= 0 || state.base.do <= 0)) endMatch(state.base.xanh <= 0 ? 'do' : 'xanh', 'Thành địch đã bị phá');
     updateCamera();
@@ -1175,24 +1222,28 @@
       if (state.focus.y != null && tz > 1.05) ty = state.focus.y - 34;
     } else {
       state.focus = null;
-      const fighting = state.units.filter(u => u.state === 'attack' && state.tick - u.battleAt <= 12 && Number.isFinite(u.battleX));
-      const xs = state.units.filter(u => u.team === 'xanh').map(u => u.x), ds = state.units.filter(u => u.team === 'do').map(u => u.x);
-      if (fighting.length) {
-        // Chia giao tranh thành cụm gần nhau; ưu tiên cụm đông và có tướng mạnh.
-        const clusters = [];
-        for (const u of fighting) {
-          let c = clusters.find(g => Math.abs(g.x / g.n - u.battleX) < 210);
-          if (!c) { c = { x: 0, n: 0, score: 0, newest: 0 }; clusters.push(c); }
-          const weight = 1 + Math.min(6, u.tier || 0) * .18;
-          c.x += u.battleX * weight; c.n += weight; c.score += weight;
-          c.newest = Math.max(c.newest, u.battleAt);
-        }
-        const c = clusters.sort((a, b) => b.score - a.score || b.newest - a.newest)[0];
-        tx = c.x / c.n;
+      let blueMaxX = -Infinity, redMinX = Infinity;
+      const clusters = [];
+      for (const u of state.units) {
+        if (u.team === 'xanh') blueMaxX = Math.max(blueMaxX, u.x);
+        else redMinX = Math.min(redMinX, u.x);
+        if (u.state !== 'attack' || state.tick - u.battleAt > 12 || !Number.isFinite(u.battleX)) continue;
+        let c = null;
+        for (let i = clusters.length - 1; i >= 0; i--) if (Math.abs(clusters[i].x / clusters[i].n - u.battleX) < 210) { c = clusters[i]; break; }
+        if (!c) { c = { x: 0, n: 0, score: 0, newest: 0 }; clusters.push(c); }
+        const weight = 1 + Math.min(6, u.tier || 0) * .18;
+        c.x += u.battleX * weight; c.n += weight; c.score += weight;
+        c.newest = Math.max(c.newest, u.battleAt);
       }
-      else if (xs.length && ds.length) tx = (Math.max(...xs) + Math.min(...ds)) / 2;
-      else if (xs.length) tx = Math.max(...xs);
-      else if (ds.length) tx = Math.min(...ds);
+      let bestCluster = null;
+      for (const c of clusters) if (!bestCluster || c.score > bestCluster.score || (c.score === bestCluster.score && c.newest > bestCluster.newest)) bestCluster = c;
+      if (bestCluster) {
+        // Chia giao tranh thành cụm gần nhau; ưu tiên cụm đông và có tướng mạnh.
+        tx = bestCluster.x / bestCluster.n;
+      }
+      else if (blueMaxX > -Infinity && redMinX < Infinity) tx = (blueMaxX + redMinX) / 2;
+      else if (blueMaxX > -Infinity) tx = blueMaxX;
+      else if (redMinX < Infinity) tx = redMinX;
       else tx = WORLD / 2;
     }
     const half = W / 2 / tz;
@@ -1417,12 +1468,16 @@
     }
   }
 
-  function drawLabels(sorted) {
+  function drawLabels(sorted, viewLeft, viewRight) {
     if (state.intro) return;
     ctx.font = 'bold 10px system-ui, sans-serif'; ctx.textAlign = 'center';
-    const tagged = new Set(state.units.filter(u => u.tag && !state.bubbles.some(b => b.unit === u)).slice(-8));
+    const tagged = [];
+    for (let i = state.units.length - 1; i >= 0 && tagged.length < 8; i--) {
+      const u = state.units[i];
+      if (u.tag && u.x >= viewLeft && u.x <= viewRight && !state.bubbles.some(b => b.unit === u)) tagged.push(u);
+    }
     for (const u of sorted) {
-      if (!tagged.has(u)) continue;
+      if (!tagged.includes(u)) continue;
       if (!u.tagW) u.tagW = ctx.measureText('@' + u.owner).width + 8;
       ctx.fillStyle = 'rgba(0,0,0,.62)'; ctx.fillRect(u.x - u.tagW / 2, u.y + 5, u.tagW, 12);
       ctx.fillStyle = col(u.team); ctx.fillRect(u.x - u.tagW / 2, u.y + 5, 2, 12);
@@ -1430,6 +1485,7 @@
     }
     for (const b of (state.intro ? [] : state.bubbles)) {
       const u = b.unit, top = Math.max(150, u.topY - (b.big ? 30 : 14));
+      if (u.x < viewLeft || u.x > viewRight) continue;
       ctx.font = `bold ${b.big ? 13 : 11}px system-ui, sans-serif`;
       if (!b.tw) b.tw = ctx.measureText(b.text).width + (b.big ? 22 : 14);
       ctx.globalAlpha = Math.min(1, b.life / 25);
@@ -1551,6 +1607,7 @@
 
   function draw(t) {
     const c = state.cam;
+    const viewLeft = c.x - 150, viewRight = c.x + W / c.z + 150;
     ctx.save();
     if (state.shake > 0) ctx.translate(rnd(-.5, .5) * state.shake, rnd(-.5, .5) * state.shake);
     ctx.clearRect(-10, -10, W + 20, H + 20);
@@ -1570,23 +1627,35 @@
     if (groundCanvas) ctx.drawImage(groundCanvas, 0, GROUND_TOP, WORLD, groundH);
     drawCastle('xanh'); drawCastle('do');
     drawSpirits(t);
-    for (const d of state.dead) drawUnit(d.u, t, d.life / 36);
+    for (const d of state.dead) if (d.u.x >= viewLeft && d.u.x <= viewRight) drawUnit(d.u, t, d.life / 36);
     const sorted = state.units.slice().sort((a, b) => a.y - b.y);
-    for (const u of sorted) drawUnit(u, t);
-    drawWaves(); drawShots(); drawLabels(sorted); drawParticles();
+    for (const u of sorted) if (u.x >= viewLeft && u.x <= viewRight) drawUnit(u, t);
+    drawWaves(); drawShots(); drawLabels(sorted, viewLeft, viewRight); if (quality.effects) drawParticles();
     ctx.restore();
 
     ctx.drawImage(vignetteCanvas, 0, 0, W, H);
-    drawMinimap(); drawIntro(); drawFlashAndBanners(); drawGameOver();
+    if (quality.minimap) drawMinimap(); drawIntro(); drawFlashAndBanners(); drawGameOver();
     ctx.restore();
   }
 
   // ---------- Vòng lặp ----------
   let last = performance.now(), acc = 0;
+  perf.sampleAt = last;
   function loop(now) {
     const dt = Math.min(100, now - last); last = now;
+    const frameStart = performance.now(); let updateMs = 0;
     if (!state.paused) { acc += dt * state.speed; let n = 0; while (acc >= 1000 / 60 && n++ < 8) { update(); acc -= 1000 / 60; } if (n >= 8) acc = 0; }
+    const updateEnd = performance.now(); updateMs = updateEnd - frameStart;
     draw(now);
+    const drawEnd = performance.now(), frameMs = drawEnd - frameStart;
+    perf.frames++; perf.updateMs = updateMs; perf.drawMs = drawEnd - updateEnd; perf.frameMs = frameMs;
+    perf.maxFrameMs = Math.max(perf.maxFrameMs, frameMs);
+    if (frameMs > 1000 / 60) perf.slowFrames++;
+    perf.sampleFrames++;
+    if (now - perf.sampleAt >= 1000) {
+      perf.fps = perf.sampleFrames * 1000 / Math.max(1, now - perf.sampleAt);
+      perf.sampleAt = now; perf.sampleFrames = 0;
+    }
     requestAnimationFrame(loop);
   }
 
@@ -1605,12 +1674,12 @@
   let legendIdx = 0;
   function renderLegend() {
     const el = $('legend'); if (!el) return;
-    const g = cfg.gifts[legendIdx++ % cfg.gifts.length], def = cfg.units[cfg.roster.xanh[g.tier]];
+    const g = cfg.gifts[legendIdx++ % cfg.gifts.length], blueKey = giftUnitKey(g, 'xanh'), redKey = giftUnitKey(g, 'do'), def = cfg.units[blueKey];
     if (!def) return;
-    const tier = g.tier, r = RARITY[tier];
-    const pv = (team) => { const p = portrait(cfg.roster[team][tier], team); return `<div class="pv ${team}">${p ? `<img src="${p}">` : '<span>?</span>'}<b>${escapeHtml(labelOf(cfg.roster[team][tier], team))}</b></div>`; };
+    const tier = def.tier ?? g.tier, r = RARITY[tier];
+    const pv = (team, key) => { const p = portrait(key, team); return `<div class="pv ${team}">${p ? `<img src="${p}">` : '<span>?</span>'}<b>${escapeHtml(labelOf(key, team))}</b></div>`; };
     el.innerHTML = `<div class="lg-gift">${GIFT_ICONS[g.id] || '🎁'}<div><b>${escapeHtml(g.name)}</b><small>${g.coins} xu · ${g.random ? `quay may ${GACHA_COUNT} nhân vật` : `bậc ${tier} · <span style="color:${r.c}">${r.name}</span>`}</small></div></div>` +
-      (g.random ? `<div class="lg-arrow">→</div><div class="lg-units"><div class="pv"><b>🎡 Vòng quay 10 giây</b></div></div><div class="lg-note">${GACHA_COUNT} nhân vật · vai trò và tỉ lệ hiện trên từng ô</div>` : `<div class="lg-arrow">→</div><div class="lg-units">${pv('xanh')}${pv('do')}</div><div class="lg-note">Gọi cho phe người tặng đã chọn · ${def.skill ? '✦ có chiêu cuối' : ''}</div>`);
+      (g.random ? `<div class="lg-arrow">→</div><div class="lg-units"><div class="pv"><b>🎡 Vòng quay 4 giây</b></div></div><div class="lg-note">${GACHA_COUNT} nhân vật · vai trò và tỉ lệ hiện trên từng ô</div>` : `<div class="lg-arrow">→</div><div class="lg-units">${pv('xanh', blueKey)}${pv('do', redKey)}</div><div class="lg-note">Gọi cho phe người tặng đã chọn · ${def.skill ? '✦ có chiêu cuối' : ''}</div>`);
   }
   function renderBoards() {
     const all = Object.values(state.stats);
@@ -1657,24 +1726,27 @@
     const el = $('gifts'); if (!el) return;
     el.innerHTML = '';
     for (const gift of cfg.gifts) {
-      const unit = cfg.units[cfg.roster.xanh[gift.tier]]; if (!unit) continue;
+      const blueKey = giftUnitKey(gift, 'xanh'), redKey = giftUnitKey(gift, 'do');
+      const unit = cfg.units[blueKey]; if (!unit) continue;
       const b = document.createElement('button');
       b.className = `gift-btn t${gift.tier}${gift.random ? ' random' : ''}`;
-      const blueLabel = labelOf(cfg.roster.xanh[gift.tier], 'xanh'), redLabel = labelOf(cfg.roster.do[gift.tier], 'do');
+      const blueLabel = labelOf(blueKey, 'xanh'), redLabel = labelOf(redKey, 'do');
       const factions = `<span class="faction-line xanh"><b>XANH</b><span>${escapeHtml(blueLabel)}</span></span><span class="faction-line do"><b>QUÁI</b><span>${escapeHtml(redLabel)}</span></span>`;
       b.innerHTML = `<span class="ico">${ICO[gift.id] || '🎁'}</span>${escapeHtml(gift.name)}<div class="coin">🪙 ${gift.coins}</div><div class="unit">${gift.random ? `<span class="faction-line xanh"><b>🎡</b><span>Quay ${GACHA_COUNT} nhân vật</span></span>` : factions}</div>`;
-      b.title = gift.random ? `Tặng ${gift.name} để quay ${GACHA_COUNT} nhân vật trong 10 giây` : `Xanh: ${blueLabel} · Quái: ${redLabel} · ${gift.coins} xu`;
+      b.title = gift.random ? `Tặng ${gift.name} để quay ${GACHA_COUNT} nhân vật trong 4 giây` : `Xanh: ${blueLabel} · Quái: ${redLabel} · ${gift.coins} xu`;
       b.onclick = () => giftFrom(randomViewer(), gift, { team: window.__demoTeam || undefined });
       el.appendChild(b);
     }
   }
   const viewers = ['minh_anh', 'bao_tran', 'linh.vu', 'khoa99', 'thu_ha', 'duc.nguyen', 'lan_pham', 'quang_hai', 'my_linh', 'tuan.kiet'];
   const randomViewer = () => pick(viewers);
+  let demoViewer = null;
+  const testViewer = () => demoViewer || (demoViewer = randomViewer());
   const on = (id, fn) => { const e = $(id); if (e) e.onclick = fn; };
-  on('simCommentXanh', () => commentFrom(randomViewer(), '1'));
-  on('simCommentDo', () => commentFrom(randomViewer(), '4'));
-  on('simHearts', () => heartsFrom(randomViewer(), 100));
-  on('simDefault', () => { state.defaultOn = !state.defaultOn; toast('Spawn mặc định: ' + (state.defaultOn ? 'BẬT' : 'TẮT')); });
+  on('simCommentXanh', () => commentFrom(testViewer(), '1'));
+  on('simCommentDo', () => commentFrom(testViewer(), '2'));
+  on('simHearts', () => heartsFrom(testViewer(), 100));
+  on('simDefault', () => { state.defaultOn = false; toast('Spawn mặc định luôn TẮT'); });
   on('btnReset', () => reset(true));
   on('simGacha', () => giftFrom(randomViewer(), pick(cfg.gifts.filter(g => g.coins >= 5)), { gachaChance: 1 }));
 
@@ -1684,7 +1756,7 @@
       case 'reset': reset(c.full !== false); break;
       case 'pause': state.paused = c.value ?? !state.paused; toast(state.paused ? 'Tạm dừng' : 'Tiếp tục'); break;
       case 'speed': state.speed = clamp(Number(c.value) || 1, .25, 6); toast(`Tốc độ x${state.speed}`); break;
-      case 'default': state.defaultOn = c.value ?? !state.defaultOn; toast('Spawn mặc định: ' + (state.defaultOn ? 'BẬT' : 'TẮT')); break;
+      case 'default': state.defaultOn = false; toast('Spawn mặc định luôn TẮT'); break;
       case 'gacha': cfg.gacha.enabled = c.value ?? !cfg.gacha.enabled; toast('Quay may: ' + (cfg.gacha.enabled ? 'BẬT' : 'TẮT')); break;
       case 'spawn': spawn(c.team || 'xanh', c.unit, c.count || 1, c.user || null); break;
       case 'gift': { const g = cfg.gifts.find(x => x.id === c.gift || x.tiktokName === c.gift); if (g) giftFrom(c.user || randomViewer(), g, { team: c.team, noGacha: c.noGacha }); break; }
@@ -1694,6 +1766,20 @@
   }
   window.__kc = {
     state, spawn, command, giftFrom, heartsFrom, reset, cfg,
+    quality,
+    profile: () => ({ ...perf, units: state.units.length, particles: state.particles.length, shots: state.shots.length }),
+    update: () => update(), draw: t => draw(t),
+    setQuality(options = {}) {
+      if (Number.isFinite(options.renderScale)) quality.renderScale = clamp(options.renderScale, .6, 1);
+      if (typeof options.effects === 'boolean') quality.effects = options.effects;
+      if (typeof options.minimap === 'boolean') quality.minimap = options.minimap;
+      if (quality.renderScale !== appliedRenderScale) {
+        canvas.width = W * DPR * quality.renderScale; canvas.height = H * DPR * quality.renderScale;
+        ctx.setTransform(DPR * quality.renderScale, 0, 0, DPR * quality.renderScale, 0, 0);
+        appliedRenderScale = quality.renderScale;
+      }
+      return { ...quality };
+    },
     step(n = 60) { for (let i = 0; i < n; i++) update(); draw(state.tick * 1000 / 60); return { tick: state.tick, units: state.units.length, base: state.base, cam: Math.round(state.cam.x) }; },
   };
 
@@ -1714,7 +1800,7 @@
     es.addEventListener('control', e => { try { command(JSON.parse(e.data)); } catch (err) { /* bỏ qua lệnh hỏng */ } });
     es.addEventListener('status', e => {
       const d = JSON.parse(e.data);
-      const text = { connected: `Đã kết nối LIVE @${d.user || ''}`, offline: `Chưa vào được LIVE: ${d.message || ''}`, disconnected: 'Mất kết nối LIVE, đang thử lại...', ended: 'LIVE đã kết thúc', 'no-username': 'Chưa có username TikTok. Chạy: node server.js <username>' }[d.state];
+      const text = { connected: `Đã kết nối LIVE @${d.user || ''}`, waiting: `Đang thử kết nối lại LIVE${d.retryMs ? ` sau ${Math.ceil(d.retryMs / 1000)} giây` : ''}...`, offline: `Chưa vào được LIVE: ${d.message || ''}`, disconnected: 'Mất kết nối LIVE, đang thử lại...', ended: 'LIVE đã kết thúc', 'no-username': 'Chưa có username TikTok. Chạy: node server.js <username>' }[d.state];
       if (text) pushFeed(null, escapeHtml(text), 'sys');
     });
     // báo cáo tình hình trận cho app điều khiển
@@ -1745,10 +1831,9 @@
   }, 150);
 
   buildStatic(); buildGround();
-  loadEnv('sky', 'assets/phong-canh-viet.png', buildSky);
-  loadEnv('ground', 'assets/mat-dat-viet.png', buildGround);
+  loadEnv('sky', 'assets/phong-canh-viet.webp', buildSky);
+  loadEnv('ground', 'assets/mat-dat-viet.webp', buildGround);
   renderGifts(); renderLegend(); renderBoards();
-  pushFeed(null, 'Chào mừng đến phòng LIVE! Bình luận <b class="xanh">1</b> = phe <b class="xanh">DÂN VIỆT</b> · <b class="do">4</b> = phe <b class="do">YÊU TINH</b>', 'sys');
+  pushFeed(null, 'Chào mừng đến phòng LIVE! Bình luận <b class="xanh">1</b> = phe <b class="xanh">DÂN VIỆT</b> · <b class="do">2</b> = phe <b class="do">YÊU TINH</b> · tim theo phe vừa chọn', 'sys');
   requestAnimationFrame(loop);
 })();
-
