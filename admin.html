@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" href="data:," />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Quản lý — Kháng Chiến</title>
+<style>
+  body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: #0f172a; color: #e2e8f0; }
+  header { padding: 16px 24px; background: #111827; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1f2937; }
+  header h1 { font-size: 18px; margin: 0; }
+  main { padding: 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1200px; }
+  section { background: #111827; border: 1px solid #1f2937; border-radius: 14px; padding: 16px; }
+  section.full { grid-column: 1 / -1; }
+  h2 { font-size: 15px; margin: 0 0 12px; color: #93c5fd; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px; border-bottom: 1px solid #1f2937; }
+  input, select { background: #0b1220; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; padding: 6px 8px; width: 100%; }
+  input[type=number] { width: 90px; }
+  label { display: block; font-size: 12px; color: #94a3b8; margin: 8px 0 4px; }
+  .row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+  button { background: #2563eb; color: #fff; border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; font-weight: 600; }
+  button.ghost { background: #1f2937; }
+  button.danger { background: #b91c1c; }
+  .note { font-size: 12px; color: #94a3b8; line-height: 1.5; }
+  .ok { color: #4ade80; font-size: 13px; }
+  a { color: #93c5fd; }
+  .unitcard { display: inline-block; background: #0b1220; border: 1px solid #334155; border-radius: 10px; padding: 8px 10px; margin: 4px; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Quản lý trận TikTok LIVE — Kháng Chiến</h1>
+  <div>
+    <a href="index.html" target="_blank">Xem màn hình LIVE →</a>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>Luật spawn mặc định</h2>
+    <div class="row">
+      <div><label>Bật / tắt</label>
+        <select id="dsEnabled"><option value="true">Bật</option><option value="false">Tắt</option></select></div>
+      <div><label>Mỗi (giây)</label><input type="number" id="dsInterval" min="1" /></div>
+      <div><label>Lính mỗi phe</label><input type="number" id="dsPerTeam" min="0" /></div>
+      <div><label>Loại lính</label><select id="dsUnit"></select></div>
+    </div>
+    <p class="note">Khi một phe chưa có quà nào, phe đó sẽ tự spawn lính lẻ tẻ theo mốc thời gian này.</p>
+  </section>
+
+  <section>
+    <h2>Tim và bình luận</h2>
+    <div class="row">
+      <div><label>Mỗi bao nhiêu tim gọi 1 tướng</label><input type="number" id="heartThreshold" min="1" /></div>
+      <div><label>Số quân mỗi mốc tim</label><input type="number" id="heartCount" min="1" max="8" /></div>
+      <div><label>Quân tim phe xanh (mã, cách nhau bằng dấu phẩy)</label><input id="heartUnit" /></div>
+      <div><label>Quân tim phe đỏ (mã, cách nhau bằng dấu phẩy)</label><input id="heartUnit2" /></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div><label>Bình luận vào phe xanh</label><input type="text" id="joinXanh" /></div>
+      <div><label>Bình luận vào phe đỏ</label><input type="text" id="joinDo" /></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div><label>Lính phe xanh</label><select id="joinUnit"></select></div><div><label>Lính phe đỏ</label><select id="joinUnitDo"></select></div>
+      <div><label>Số lính mỗi bình luận</label><input type="number" id="joinCount" min="1" max="8" /></div>
+      <div><label>Hồi chiêu mỗi người (giây)</label><input type="number" id="joinCool" min="0" /></div>
+    </div>
+    <p class="note">Quân thường luân phiên theo danh sách ở mỗi mốc tim. Mỗi lượt bình luận và mốc tim gọi một nhóm quân. Mã phe xanh: linh, khienMay, daNem, ySi, songKiem, traucon, kyBinh; phe đỏ: linh là Quỷ Lùn.</p>
+  </section>
+
+  <section>
+    <h2>Quay may</h2>
+    <div class="row"><div><label>Quay may</label><select id="gachaEnabled"><option value="true">Bật</option><option value="false">Tắt</option></select></div><div><label>Xác suất (0–100%)</label><input id="gachaChance" type="number" min="0" max="100" step="1"></div><div><label>Hệ số tăng theo xu</label><input id="gachaK" type="number" min="0" step="0.1"></div></div>
+  </section>
+  <section class="full">
+    <h2>Quà TikTok → đội hình</h2>
+    <table>
+      <thead><tr><th>Tên quà</th><th>Tên quà trên TikTok (tiếng Anh)</th><th>Xu (coin)</th><th>Đơn vị gọi</th><th>Số lượng</th></tr></thead>
+      <tbody id="giftRows"></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost" id="addGift">+ Thêm quà</button>
+    </div>
+  </section>
+
+  <section class="full">
+    <h2>Danh sách đơn vị</h2>
+    <div id="unitList"></div>
+    <p class="note">Chỉnh máu, sát thương, tốc độ, tầm đánh trong <code>config.js</code> (mục <code>units</code>). Lưu ở đây sẽ dùng cấu hình mới khi mở lại màn hình LIVE.</p>
+  </section>
+
+  <section class="full">
+    <div class="row">
+      <button id="save">Lưu & áp dụng</button>
+      <button class="ghost" id="reset">Khôi phục mặc định</button>
+      <span class="ok" id="status"></span>
+    </div>
+  </section>
+</main>
+
+<script src="config.js"></script>
+<script>
+(() => {
+  let cfg = window.loadConfig();
+  const $ = id => document.getElementById(id);
+  const unitKeys = Object.keys(cfg.units);
+
+  function unitOptions(selected) {
+    return unitKeys.map(k => `<option value="${k}" ${k === selected ? 'selected' : ''}>${cfg.units[k].label}</option>`).join('');
+  }
+
+  function tierOptions(selected) {
+    return cfg.tierNames.slice(1).map((n, i) => `<option value="${i+1}" ${i+1 === selected ? 'selected' : ''}>${i+1} · ${n} · ${cfg.units[cfg.roster.xanh[i+1]].label} / ${cfg.units[cfg.roster.do[i+1]].label}</option>`).join('');
+  }
+  function render() {
+    $('gachaEnabled').value = String(cfg.gacha.enabled);
+    $('gachaChance').value = Math.round(cfg.gacha.chance * 100);
+    $('gachaK').value = cfg.gacha.k;
+    $('dsEnabled').value = String(cfg.defaultSpawn.enabled);
+    $('dsInterval').value = cfg.defaultSpawn.intervalSec;
+    $('dsPerTeam').value = cfg.defaultSpawn.perTeam;
+    $('dsUnit').innerHTML = unitOptions(cfg.defaultSpawn.unit);
+    $('heartThreshold').value = cfg.hearts.threshold;
+    $('heartCount').value = cfg.hearts.count || 2;
+    $('heartUnit').value = cfg.hearts.units.xanh.join(', ');
+    $('heartUnit2').value = cfg.hearts.units.do.join(', ');
+    $('joinUnit').innerHTML = unitOptions(cfg.joinSpawn.xanh);
+    $('joinUnitDo').innerHTML = unitOptions(cfg.joinSpawn.do);
+    $('joinCool').value = cfg.joinSpawn.cooldownSec;
+    $('joinCount').value = cfg.joinSpawn.count || 2;
+    $('joinXanh').value = Object.keys(cfg.commentJoin).find(k => cfg.commentJoin[k] === 'xanh') || '';
+    $('joinDo').value = Object.keys(cfg.commentJoin).find(k => cfg.commentJoin[k] === 'do') || '';
+
+    $('giftRows').innerHTML = cfg.gifts.map((g, i) => `
+      <tr>
+        <td><input data-i="${i}" data-f="name" value="${g.name}" /></td>
+        <td><input data-i="${i}" data-f="tiktokName" value="${g.tiktokName || ''}" /></td>
+        <td><input type="number" data-i="${i}" data-f="coins" value="${g.coins}" /></td>
+        <td><select data-i="${i}" data-f="tier">${tierOptions(g.tier)}</select></td>
+        <td><input type="number" data-i="${i}" data-f="count" value="${g.count}" /></td>
+        <td><button class="danger" data-del="${i}">Xóa</button></td>
+      </tr>`).join('');
+
+    $('unitList').innerHTML = unitKeys.map(k => {
+      const u = cfg.units[k];
+      return `<span class="unitcard"><b>${u.label}</b> · máu ${u.hp} · sát thương ${u.dmg} · tốc độ ${u.speed} · tầm ${u.range}${u.heal ? ' · hồi ' + u.heal : ''}</span>`;
+    }).join('');
+  }
+
+  function readForm() {
+    cfg.gacha.enabled = $('gachaEnabled').value === 'true';
+    cfg.gacha.chance = Math.max(0, Math.min(100, Number($('gachaChance').value))) / 100;
+    cfg.gacha.k = Math.max(0, Number($('gachaK').value));
+    cfg.defaultSpawn.enabled = $('dsEnabled').value === 'true';
+    cfg.defaultSpawn.intervalSec = Number($('dsInterval').value) || 6;
+    cfg.defaultSpawn.perTeam = Number($('dsPerTeam').value) || 0;
+    cfg.defaultSpawn.unit = $('dsUnit').value;
+    cfg.hearts.threshold = Number($('heartThreshold').value) || 100;
+    cfg.hearts.count = Math.max(1, Math.min(8, Number($('heartCount').value) || 2));
+    for (const [team, id] of [['xanh','heartUnit'],['do','heartUnit2']]) { const pool = $(id).value.split(',').map(x => x.trim()).filter(k => cfg.units[k] && cfg.units[k].tier === 0); cfg.hearts.units[team] = pool.length ? pool : ['linh']; }
+    cfg.joinSpawn = { xanh: $('joinUnit').value, do: $('joinUnitDo').value, count: Math.max(1, Math.min(8, Number($('joinCount').value) || 2)), cooldownSec: Number($('joinCool').value) || 0 };
+    cfg.commentJoin = {};
+    if ($('joinXanh').value.trim()) cfg.commentJoin[$('joinXanh').value.trim()] = 'xanh';
+    if ($('joinDo').value.trim()) cfg.commentJoin[$('joinDo').value.trim()] = 'do';
+    document.querySelectorAll('#giftRows [data-f]').forEach(el => {
+      const g = cfg.gifts[Number(el.dataset.i)];
+      const f = el.dataset.f;
+      g[f] = (f === 'coins' || f === 'count' || f === 'tier') ? Number(el.value) : el.value;
+    });
+  }
+
+  $('giftRows').addEventListener('click', e => {
+    const i = e.target.dataset.del;
+    if (i === undefined) return;
+    readForm();
+    cfg.gifts.splice(Number(i), 1);
+    render();
+  });
+
+  $('addGift').onclick = () => {
+    readForm();
+    cfg.gifts.push({ id: 'gift' + Date.now(), name: 'Quà mới', coins: 1, tier: 1, count: 1 });
+    render();
+  };
+
+  $('save').onclick = () => {
+    readForm();
+    window.saveConfig(cfg);
+    $('status').textContent = 'Đã lưu. Mở lại màn hình LIVE để áp dụng.';
+    setTimeout(() => $('status').textContent = '', 3000);
+  };
+
+  $('reset').onclick = () => {
+    if (!confirm('Khôi phục cấu hình mặc định?')) return;
+    cfg = JSON.parse(JSON.stringify(window.DEFAULT_CONFIG));
+    window.saveConfig(cfg);
+    render();
+    $('status').textContent = 'Đã khôi phục mặc định.';
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>

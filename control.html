@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<link rel="icon" href="data:," />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>App điều khiển — Kháng Chiến</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, "Segoe UI", sans-serif; background: #0b0814; color: #ece4ff; }
+  header { padding: 12px 18px; background: #130d22; border-bottom: 1px solid #2a2140; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 16px; margin: 0; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: #64748b; }
+  .dot.ok { background: #4ade80; box-shadow: 0 0 8px #4ade80; } .dot.bad { background: #f87171; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; padding: 16px; max-width: 1100px; margin: 0 auto; }
+  section { background: #130d22; border: 1px solid #2a2140; border-radius: 14px; padding: 14px; }
+  h2 { font-size: 13px; margin: 0 0 10px; color: #c4b5fd; letter-spacing: .3px; }
+  button { background: #2d2250; color: #fff; border: 1px solid #4c3a7a; border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button:hover { background: #3b2d68; } button:active { transform: scale(.97); }
+  button.danger { background: #7f1d1d; border-color: #b91c1c; } button.danger:hover { background: #991b1b; }
+  button.ok { background: #14532d; border-color: #16a34a; }
+  button.on { background: #1d4ed8; border-color: #60a5fa; }
+  select, input { background: #0b0814; color: #ece4ff; border: 1px solid #3b2c5c; border-radius: 8px; padding: 7px 8px; font-size: 13px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .row > * { flex: 0 0 auto; } .row .grow { flex: 1; min-width: 100px; }
+  label { font-size: 11px; color: #94a3b8; display: block; margin-bottom: 3px; }
+  .teams { display: flex; gap: 8px; margin-bottom: 8px; }
+  .teams button { flex: 1; } .teams button.xanh.sel { background: #0369a1; border-color: #38bdf8; } .teams button.do.sel { background: #9f1239; border-color: #fb7185; }
+  .stat { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 13px; }
+  .stat div { background: #0b0814; border-radius: 8px; padding: 6px 8px; } .stat b { color: #fde68a; }
+  .xanh-t { color: #7dd3fc; } .do-t { color: #fda4af; }
+  .bar { height: 8px; background: #000; border-radius: 4px; overflow: hidden; margin: 3px 0 7px; } .bar > i { display: block; height: 100%; }
+  .top { font-size: 12px; line-height: 1.6; } .top span.v { float: right; color: #e2e8f0; }
+  .note { font-size: 11px; color: #94a3b8; line-height: 1.5; margin-top: 8px; }
+  #log { font-size: 11px; color: #94a3b8; max-height: 90px; overflow: auto; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎮 App điều khiển — Kháng Chiến</h1>
+  <div><span class="dot" id="dot"></span><span id="conn">Đang kết nối…</span></div>
+</header>
+<main>
+  <section>
+    <h2>Điều khiển trận</h2>
+    <div class="row">
+      <button class="danger" id="reset">⟲ Reset trận + BXH</button>
+      <button id="newMatch">⏭ Trận mới (giữ BXH)</button>
+    </div>
+    <div class="row">
+      <button id="pause">⏸ Tạm dừng</button>
+      <button data-speed="0.5">x0.5</button><button data-speed="1" class="on">x1</button><button data-speed="2">x2</button><button data-speed="4">x4</button>
+    </div>
+    <div class="row">
+      <button id="toggleDefault">Lính mặc định: …</button>
+      <button id="toggleGacha">Quay may: …</button>
+    </div>
+    <div class="note">Dùng được cả khi đang LIVE thật: app này gửi lệnh qua server tới màn hình game (OBS/TikTok LIVE Studio), không cần chạm vào cửa sổ game.</div>
+  </section>
+
+  <section>
+    <h2>Tình hình trận</h2>
+    <div class="stat">
+      <div>Trận số <b id="matchNo">–</b></div><div>Thời gian <b id="secs">–</b></div>
+      <div class="xanh-t">Quân Xanh <b id="uX">–</b></div><div class="do-t">Quân Đỏ <b id="uD">–</b></div>
+    </div>
+    <div style="margin-top:8px">
+      <label>Thành Anh Hùng (Xanh) <b id="bX">–</b>%</label><div class="bar"><i id="barX" style="background:#38bdf8;width:0"></i></div>
+      <label>Thành Yêu Quái (Đỏ) <b id="bD">–</b>%</label><div class="bar"><i id="barD" style="background:#f43f5e;width:0"></i></div>
+    </div>
+    <div class="note" id="phase">–</div>
+  </section>
+
+  <section>
+    <h2>Gọi quân thủ công</h2>
+    <div class="teams"><button class="xanh sel" data-team="xanh">DÂN VIỆT (Xanh)</button><button class="do" data-team="do">YÊU TINH (Đỏ)</button></div>
+    <div class="row"><div class="grow"><label>Nhân vật</label><select id="unitSel" style="width:100%"></select></div><div><label>Số lượng</label><input id="unitCnt" type="number" min="1" value="1" style="width:70px"></div></div>
+    <button class="ok" id="spawn">＋ Gọi ra trận</button>
+  </section>
+
+  <section>
+    <h2>Giả lập quà / tim / bình luận</h2>
+    <div class="row"><div class="grow"><label>Quà</label><select id="giftSel" style="width:100%"></select></div><div><label>Tên người tặng</label><input id="giftUser" value="khan_gia" style="width:110px"></div></div>
+    <div class="row"><button class="ok" id="sendGift">🎁 Tặng quà cho phe đã chọn</button><button id="sendGacha">🎰 Tặng + quay may</button></div>
+    <div class="row"><button id="sendHearts">❤ Thả 100 tim</button><button id="joinX">Bình luận "1"</button><button id="joinD">Bình luận "4"</button></div>
+  </section>
+
+  <section>
+    <h2>🏆 Bảng xếp hạng</h2>
+    <div class="top" id="tops">Chưa có dữ liệu</div>
+  </section>
+
+  <section>
+    <h2>Nhật ký lệnh</h2>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script src="config.js"></script>
+<script>
+  const cfg = window.loadConfig();
+  const $ = id => document.getElementById(id);
+  let team = 'xanh', report = null;
+
+  for (const [k, u] of Object.entries(cfg.units)) $('unitSel').insertAdjacentHTML('beforeend', `<option value="${k}">${u.label} (bậc ${u.tier || 0})</option>`);
+  for (const g of cfg.gifts) $('giftSel').insertAdjacentHTML('beforeend', `<option value="${g.id}">${g.name} · ${g.coins} xu → ${cfg.units[cfg.roster.xanh[g.tier]].label} / ${cfg.units[cfg.roster.do[g.tier]].label}</option>`);
+
+  function log(t) { const d = document.createElement('div'); d.textContent = new Date().toLocaleTimeString() + ' · ' + t; $('log').prepend(d); while ($('log').children.length > 30) $('log').lastChild.remove(); }
+  async function send(cmd, text) {
+    try {
+      const r = await fetch('/control', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cmd) });
+      log(r.ok ? 'Đã gửi: ' + (text || cmd.type) : 'Lỗi gửi lệnh (' + r.status + ')');
+    } catch (e) { log('Không gửi được: server chưa chạy?'); }
+  }
+
+  document.querySelectorAll('.teams button').forEach(b => b.onclick = () => { team = b.dataset.team; document.querySelectorAll('.teams button').forEach(x => x.classList.toggle('sel', x === b)); });
+  $('reset').onclick = () => { if (confirm('Đặt lại trận và xóa toàn bộ bảng xếp hạng?')) send({ type: 'reset', full: true }, 'Reset trận + BXH'); };
+  $('newMatch').onclick = () => send({ type: 'reset', full: false }, 'Trận mới');
+  $('pause').onclick = () => send({ type: 'pause' }, 'Tạm dừng / tiếp tục');
+  document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => send({ type: 'speed', value: Number(b.dataset.speed) }, 'Tốc độ x' + b.dataset.speed));
+  $('toggleDefault').onclick = () => send({ type: 'default' }, 'Bật/tắt lính mặc định');
+  $('toggleGacha').onclick = () => send({ type: 'gacha' }, 'Bật/tắt quay may');
+  $('spawn').onclick = () => send({ type: 'spawn', team, unit: $('unitSel').value, count: Number($('unitCnt').value) || 1, user: 'điều_khiển' }, `Gọi ${$('unitSel').selectedOptions[0].text} cho ${team}`);
+  $('sendGift').onclick = () => send({ type: 'gift', team, gift: $('giftSel').value, user: $('giftUser').value || 'khan_gia', noGacha: true }, `Quà ${$('giftSel').selectedOptions[0].text}`);
+  $('sendGacha').onclick = () => send({ type: 'gift', team, gift: $('giftSel').value, user: $('giftUser').value || 'khan_gia', noGacha: false }, 'Quà + quay may');
+  $('sendHearts').onclick = () => send({ type: 'hearts', team, count: 100, user: $('giftUser').value || 'khan_gia' }, 'Thả 100 tim');
+  $('joinX').onclick = () => send({ type: 'comment', text: '1', user: $('giftUser').value || 'khan_gia' }, 'Bình luận 1');
+  $('joinD').onclick = () => send({ type: 'comment', text: '4', user: $('giftUser').value || 'khan_gia' }, 'Bình luận 4');
+
+  async function poll() {
+    try {
+      const r = await (await fetch('/summary', { cache: 'no-store' })).json();
+      const rep = r.report, fresh = rep && Date.now() - rep.at < 6000;
+      $('dot').className = 'dot ' + (fresh ? 'ok' : 'bad');
+      $('conn').textContent = fresh ? `Đã nối với màn hình game${r.tiktok ? ' · TikTok @' + r.tiktok : ' · chưa nối TikTok (chạy node server.js <username>)'}` : 'Server chạy nhưng màn hình game chưa mở';
+      if (rep) {
+        $('matchNo').textContent = rep.matchNo; $('secs').textContent = `${Math.floor(rep.secs / 60)}:${String(rep.secs % 60).padStart(2, '0')}`;
+        $('uX').textContent = rep.units.xanh; $('uD').textContent = rep.units.do;
+        $('bX').textContent = Math.round(rep.base.xanh); $('bD').textContent = Math.round(rep.base.do);
+        $('barX').style.width = rep.base.xanh + '%'; $('barD').style.width = rep.base.do + '%';
+        $('phase').textContent = rep.phase + (rep.gameOver ? ' · KẾT THÚC' : '');
+        $('pause').textContent = rep.paused ? '▶ Tiếp tục' : '⏸ Tạm dừng';
+        $('toggleDefault').textContent = 'Lính mặc định: ' + (rep.defaultOn ? 'BẬT' : 'TẮT');
+        $('toggleGacha').textContent = 'Quay may: ' + (rep.gacha ? 'BẬT' : 'TẮT');
+        document.querySelectorAll('[data-speed]').forEach(b => b.classList.toggle('on', Number(b.dataset.speed) === rep.speed));
+        const blk = (t, k) => `<b>${t}</b><br>` + (rep.top[k].length ? rep.top[k].map((s, i) => `${i + 1}. <span class="${s.team}-t">${s.user.replace(/</g, '&lt;')}</span><span class="v">${s.v}</span><br>`).join('') : '<span style="color:#64748b">chưa có</span><br>');
+        $('tops').innerHTML = blk('🗡 Sát thương', 'dmg') + '<br>' + blk('💚 Hồi máu', 'heal') + '<br>' + blk('🛡 Chịu đòn', 'tank');
+      }
+    } catch (e) { $('dot').className = 'dot bad'; $('conn').textContent = 'Không nối được server (node server.js đã chạy chưa?)'; }
+  }
+  setInterval(poll, 1000); poll();
+</script>
+</body>
+</html>
+

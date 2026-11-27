@@ -1,0 +1,5 @@
+node_modules/
+work/
+work-preview-script.py
+preview-*.png
+.env*
